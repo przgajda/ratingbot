@@ -1,6 +1,9 @@
 package pl.pgajda.ratingbot;
 
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import com.google.wave.api.*;
 
 @SuppressWarnings("serial")
@@ -14,32 +17,48 @@ public class RatingBotServlet extends AbstractRobotServlet {
 		if (bundle.wasSelfAdded()) {
 			Blip blip = wavelet.appendBlip();
 			TextView textView = blip.getDocument();
-			textView.append("Hello :)");
+			textView.appendMarkup("Hello. You may rate every new blip now.\n" +
+					"Use <b>#!rb-changefont-no</b> to disable font changes and\n" +
+					"<b>#!rb-changefont-yes</b> to re-enable them.");
 		}
 
 		for (Event e: bundle.getEvents()) {
-			TextView content = e.getBlip().getDocument();
-			
 			switch(e.getType()) {
 				case BLIP_SUBMITTED:
-					updateVoteForm(content, getRating(content));
+					updatePreferences(e);
+
+					int rating = getRating(e.getBlip().getDocument());
+					updateVoteForm(e, rating);
 					break;
 					
 				case FORM_BUTTON_CLICKED:
-					vote(content, e);
+					vote(e);
 					break;
 			}
 		}
 	}
 	
-	private void updateVoteForm(TextView content, int rating)
+	private void updatePreferences(Event e)
+	{
+		TextView content = e.getBlip().getDocument();
+		Wavelet wave = e.getWavelet();
+		
+		Pattern p = Pattern.compile("#!rb-changefont-(yes|no)");
+		Matcher m = p.matcher(content.getText());
+		if( m.matches() ) {
+			String value = m.group(1);
+			wave.setDataDocument("changefont", value);
+			blipReply(e.getBlip(), "ChangeFont is now set to " + value);
+		}
+	}
+	
+	private void updateVoteForm(Event e, int rating)
 	{	
-		double fontSize = 12.0+5.0*Math.atan((double)rating/30.0);
-		content.setAnnotation("style/fontSize", Math.round(fontSize)+"px");
-		if( rating > 100 )
-			content.setAnnotation("style/fontWeight", "bold");
-		else if( rating < -50 )
-			content.setAnnotation("style/color", "rgb(128,128,128)");
+		TextView content = e.getBlip().getDocument();
+		String changeFontPref = e.getWavelet().getDataDocument("changefont");
+		
+		if( changeFontPref == null || changeFontPref.equals("yes") )
+			setFontStyle(content, rating);
 		
 		content.getFormView().delete("voteM");
 		content.getFormView().delete("voteP");
@@ -71,8 +90,9 @@ public class RatingBotServlet extends AbstractRobotServlet {
 		content.setAnnotation(new Range(rangeStart, rangeEnd), "style/fontSize", "10px");
 	}
 	
-	private void vote(TextView content, Event e)
+	private void vote(Event e)
 	{
+		TextView content = e.getBlip().getDocument();
 		String voter = e.getModifiedBy().replace('@', '_');
 		
 		if( voter.equals(myId) )
@@ -98,23 +118,40 @@ public class RatingBotServlet extends AbstractRobotServlet {
 		
 		content.setAnnotation("rating", ""+rating);
 				
-		updateVoteForm(content, rating);
+		updateVoteForm(e, rating);
+	}
+	
+	private void setFontStyle(TextView content, int rating)
+	{
+		double fontSize = 12.0+5.0*Math.atan((double)rating/30.0);
+		content.setAnnotation("style/fontSize", Math.round(fontSize)+"px");
+		if( rating > 100 )
+			content.setAnnotation("style/fontWeight", "bold");
+		else if( rating < -50 )
+			content.setAnnotation("style/color", "rgb(128,128,128)");		
 	}
 	
 	private int getRating(TextView content) 
 	{
-		int rating;
+		int rating = 0;
 		
-		List<Annotation> ratings = content.getAnnotations("rating");
-		if( ratings.size() > 0 ) {
-			String ratingStr = ratings.get(0).getValue();
-			rating = Integer.parseInt(ratingStr);
-		}
-		else {
-			rating = 0;
-			content.setAnnotation("rating", ""+rating);
-		}
+		try {
+			List<Annotation> ratings = content.getAnnotations("rating");
+		 
+			if( ratings.size() > 0 ) {
+				String ratingStr = ratings.get(0).getValue();
+				rating = Integer.parseInt(ratingStr);
+			}
+			else {
+				content.setAnnotation("rating", ""+rating);
+			}
+		} catch(NullPointerException ignore) {}
 		
 		return rating;
+	}
+	
+	private void blipReply(Blip blip, String message)
+	{
+		blip.createChild().getDocument().append(message);
 	}
 }
