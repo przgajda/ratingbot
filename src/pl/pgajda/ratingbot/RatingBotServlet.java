@@ -43,12 +43,12 @@ public class RatingBotServlet extends AbstractRobotServlet {
 		TextView content = e.getBlip().getDocument();
 		Wavelet wave = e.getWavelet();
 		
-		Pattern p = Pattern.compile("#!rb-changefont-(yes|no)");
+		Pattern p = Pattern.compile(".*#!rb-changefont-(yes|no).*");
 		Matcher m = p.matcher(content.getText());
 		if( m.matches() ) {
 			String value = m.group(1);
 			wave.setDataDocument("changefont", value);
-			blipReply(e.getBlip(), "ChangeFont is now set to " + value);
+			blipReply(e.getBlip(), "ChangeFont preference is now set to " + value);
 		}
 	}
 	
