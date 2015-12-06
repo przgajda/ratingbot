@@ -1,0 +1,1 @@
+A wave robot that allows participants to rate Blips.
